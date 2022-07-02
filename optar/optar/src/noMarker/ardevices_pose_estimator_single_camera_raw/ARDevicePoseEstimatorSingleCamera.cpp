@@ -77,10 +77,6 @@ void ARDevicePoseEstimatorSingleCamera::featuresCallback(const opt_msgs::ArcoreC
 	else
 	{
 		//publishTransformAsTfFrame(estimator->getEstimation(),estimator->getARDeviceId()+"_world_filtered","/world",arcoreInputMsg->header.stamp);
-
-
-
-
 		opt_msgs::ARDevicePoseEstimate outputPoseMsg;
 		outputPoseMsg.deviceId = getARDeviceId();
 		outputPoseMsg.fixed_sensor_name = fixed_sensor_name;
@@ -92,9 +88,6 @@ void ARDevicePoseEstimatorSingleCamera::featuresCallback(const opt_msgs::ArcoreC
 		poseEstimatePublisher.publish(outputPoseMsg);
 
 		ROS_INFO_STREAM("Published raw pose estimate "<<poseToString(outputPoseMsg.cameraPose.pose));
-
-
-
 
 		tf::Pose phonePoseTf_world;
 		tf::poseMsgToTF(estimator->getLastPoseEstimate().pose,phonePoseTf_world);
@@ -210,8 +203,6 @@ int ARDevicePoseEstimatorSingleCamera::start(std::shared_ptr<ros::NodeHandle> no
 
 	poseEstimatePublisher = nodeHandle->advertise<opt_msgs::ARDevicePoseEstimate>(poseEstimateTopicName, 10);
 
-
-
 	//get camera info
 	boost::shared_ptr<sensor_msgs::CameraInfo const> cameraInfoPtr;
 	ROS_INFO_STREAM("waiting for cameraInfo on topic "<<ros::names::remap(cameraInfoTopicName));
@@ -254,12 +245,6 @@ int ARDevicePoseEstimatorSingleCamera::start(std::shared_ptr<ros::NodeHandle> no
 	listener.lookupTransform(targetFrame, inputFrame, targetTime, transformKinectToWorldNotMsg);
 	tf::transformStampedTFToMsg(transformKinectToWorldNotMsg,transformKinectToWorld);
 	ROS_INFO("Got transform from %s to %s ",inputFrame.c_str(), targetFrame.c_str());
-
-
-
-
-
-
 
 	//setup the registration estimator
 	estimator = std::make_shared<CameraPoseEstimator>(ARDeviceId, *nodeHandle, transformKinectToWorld, fixed_sensor_name, featuresMemory);
@@ -312,7 +297,6 @@ int ARDevicePoseEstimatorSingleCamera::start(std::shared_ptr<ros::NodeHandle> no
 	featuresTpc_synchronizer->registerCallback(featuresCallbackFunction);
 
 	lastTimeReceivedMessage = std::chrono::steady_clock::now();
-
 
 	return 0;
 }

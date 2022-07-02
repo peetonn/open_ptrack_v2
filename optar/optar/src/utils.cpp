@@ -905,7 +905,21 @@ tf::Pose convertCameraPoseArcoreToRos(const tf::Pose& cameraPoseArcore)
 		tf::Transform justTranslation = tf::Transform(tf::Quaternion(1,0,0,0),phonePoseArcoreFrame.getOrigin());
 
 		//tf::Pose phonePoseArcoreInverted = tf::Transform(tf::Quaternion(tf::Vector3(1,0,0),0),phonePoseArcoreFrame.getOrigin()).inverse() * tf::Transform(phonePoseArcoreFrame.getRotation()).inverse();
-		return  justTranslation *cameraConventionTransform*justRotation;
+		//return justTranslation *cameraConventionTransform*justRotation;
+		// arkit to ros conversion -- peter
+		// 1. rotate 90 around X
+		// 2. rotate -90 around Z
+		#define PI 3.1415926535897
+		tf::Transform rotate1 = tf::Transform(tf::Quaternion(tf::Vector3(0,1,0), -PI/2));
+		tf::Transform rotate2 = tf::Transform(tf::Quaternion(tf::Vector3(0,0,1), -PI/2));
+
+		tf::Transform arCameraRotation = tf::Transform(cameraPoseArcore.getRotation());
+		tf::Transform arCameraTranslation = tf::Transform(tf::Quaternion(1,0,0,0), cameraPoseArcore.getOrigin());
+
+		//return arCameraTranslation * rotate1 * rotate2 * arCameraRotation;
+		return rotate1 * rotate2 * cameraPoseArcore;// * rotate2 * rotate1;
+		//return rotate2 * rotate1 * cameraPoseArcore;
+		//return cameraPoseArcore;
 }
 
 

@@ -248,7 +248,9 @@ void ARDeviceRegistrationEstimator::onArcorePoseReceived(const geometry_msgs::Po
     ROS_WARN_STREAM(""<<__func__<<": Skipping, received invalid ARCore pose "<<poseToString(pose_arcore_tf));
     return;
   }
-  //ROS_INFO_STREAM("Received valid ARCore pose "<<poseToString(pose_arcore_tf));
+  ROS_INFO_STREAM("Received valid AR pose " << poseToString(pose_arcore_tf));
+  ROS_INFO_STREAM("converted AR pose " << poseToString(convertedPose_tf));
+
   publishTransformAsTfFrame(convertedPose_tf, arDeviceId+"_arcore", "/world", pose.header.stamp);
 
   arcorePosesQueue.push_back(sap);

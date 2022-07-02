@@ -18,6 +18,7 @@
 #include <visualization_msgs/Marker.h>
 #include <opencv2/core/core.hpp>
 #include <tf/transform_listener.h>
+#include <chrono>
 
 
 cv::Point3f get3dPoint(int x, int y, int depth_mm, double focalLengthX, double focalLengthY, double principalPointX, double principalPointY);
@@ -63,5 +64,53 @@ tf::Pose convertCameraPoseArcoreToRos(const geometry_msgs::Pose& cameraPoseArcor
 tf::Pose convertCameraPoseArcoreToRos(const tf::Pose& cameraPoseArcore);
 
 geometry_msgs::Pose invertPose(const geometry_msgs::Pose& pose);
+
+// added by peter
+namespace profiling // NOTE: not thread-safe!
+{
+
+using namespace std::chrono;
+using profile_clock=std::chrono::high_resolution_clock;
+
+static profile_clock::time_point t, snapT;
+
+struct helper {
+    helper():start_(profile_clock::now()) { lastSnap_ = start_; }
+    ~helper() { }
+
+    template<class CastT = milliseconds>
+    double snap() {
+        auto now = profile_clock::now();
+        duration<double, typename CastT::period> d = now - lastSnap_;
+        lastSnap_ = now;
+        return d.count();
+    }
+
+    template<class CastT = milliseconds>
+    double total() {
+        duration<double, typename CastT::period> d = profile_clock::now() - start_;
+        return d.count();
+    }
+
+    profile_clock::time_point start_, lastSnap_;
+};
+
+// inline void start() { t = high_resolution_clock::now(); snapT = t; }
+
+// template<class CastT>
+// inline int snap() {
+//     auto now = high_resolution_clock::now();
+//     auto d = duration_cast<CastT>(now - snapT).count();
+//     snapT = now;
+//     return (int)d;
+// }
+
+// template<class CastT>
+// inline int total() { return (int)duration_cast<CastT>(high_resolution_clock::now() - t).count(); }
+}
+
+#define PH_START() struct profiling::helper ph ## __func__
+#define PH_SNAP()(ph##__func__.snap())
+#define PH_TOTAL()(ph##__func__.total())
 
 #endif
