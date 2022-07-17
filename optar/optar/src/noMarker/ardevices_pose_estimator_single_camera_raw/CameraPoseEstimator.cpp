@@ -329,6 +329,9 @@ int CameraPoseEstimator::update(const std::vector<cv::KeyPoint> &arcoreKeypoints
 		return -4;
 	}
 	ROS_DEBUG("-- matches 3D reconstruction %.3fms", PH_SNAP());
+	int matchIdx = 0;
+	for (auto pos : goodMatches3dPos)
+		ROS_DEBUG("  -- good match %d pose %.2f %.2f %.2f", matchIdx++, pos.x, pos.y, pos.z);
 
 	// send markers to rviz and publish matches image
 	sensor_msgs::ImagePtr matchesDebugImg;
@@ -370,11 +373,10 @@ int CameraPoseEstimator::update(const std::vector<cv::KeyPoint> &arcoreKeypoints
 
 	*/
 
-	// ROS_DEBUG_STREAM("arcoreCameraMatrix = \n"
-	// 				 << arcoreCameraMatrix);
 	cv::Vec3d tvec;
 	cv::Vec3d rvec;
 	bool usePreviousEstimate = false;
+
 	if (didComputeEstimate) // initialize with the previous estimate
 	{
 		tf::Pose lastEstimateTf;
@@ -382,6 +384,7 @@ int CameraPoseEstimator::update(const std::vector<cv::KeyPoint> &arcoreKeypoints
 		tfPoseToOpenCvPose(lastEstimateTf, rvec, tvec);
 		usePreviousEstimate = true;
 	}
+
 	std::vector<int> inliers;
 	ROS_DEBUG_STREAM("Running pnpRansac with iterations=" << pnpIterations << " pnpReprojectionError=" << pnpReprojectionError << " pnpConfidence=" << pnpConfidence);
 
@@ -395,7 +398,9 @@ int CameraPoseEstimator::update(const std::vector<cv::KeyPoint> &arcoreKeypoints
 								 inliers);
 	if (!rb)
 		r = -1;
+
 	ROS_DEBUG_STREAM("solvePnPRansac used " << inliers.size() << " inliers and says:\t tvec = " << tvec.t() << "\t rvec = " << rvec.t());
+	
 	if (inliers.size() < 4 || inliers.size() < minimumMatchesNumber)
 	{
 		ROS_WARN_STREAM("Not enough match inliers (" << inliers.size() << "<" << minimumMatchesNumber << "). Skipping frame");
@@ -411,8 +416,8 @@ int CameraPoseEstimator::update(const std::vector<cv::KeyPoint> &arcoreKeypoints
 					  arcoreCameraMatrix,
 					  cv::noArray(),
 					  reprojectedPoints);
-	// debug image to show the reprojection errors
 
+	// debug image to show the reprojection errors
 	double reprojectionError = 0;
 	// calculate reprojection error mean and draw reprojections
 	for (unsigned int i = 0; i < inliers.size(); i++)
@@ -431,8 +436,16 @@ int CameraPoseEstimator::update(const std::vector<cv::KeyPoint> &arcoreKeypoints
 	ROS_INFO_STREAM("inliers (#=" << inliers.size() << ") reprojection error = " << reprojectionError);
 
 	visualization_msgs::MarkerArray markerArray;
-	for (unsigned int i = 0; i < inliers.size(); i++)																									  // build the rviz markers
-		markerArray.markers.push_back(buildMarker(goodMatches3dPos.at(inliers.at(i)), "match" + std::to_string(i), 0, 0, 1, 1, 0.2, fixedCameraFrameId)); // matches are blue
+	for (unsigned int i = 0; i < inliers.size(); i++)	
+	{										
+		// build the rviz markers
+		markerArray.markers.push_back(buildMarker(goodMatches3dPos.at(inliers.at(i)), "match" + std::to_string(i), 
+										0, 0, 1, 1, 0.2, 
+										fixedCameraFrameId)); // matches are blue
+		auto inlierPos = goodMatches3dPos.at(inliers.at(i));
+		ROS_DEBUG("match inlier %d 3D pos {%.2f, %.2f, %.2f}", i,
+					inlierPos.x, inlierPos.y, inlierPos.z);
+	}
 	debug_markers_pub.publish(markerArray);
 
 	ROS_DEBUG("-- debug markers publish %.3fms", PH_SNAP());
@@ -628,7 +641,7 @@ void CameraPoseEstimator::drawAndSendReproectionImage(const cv::Mat &arcoreImage
 													  const std::vector<cv::Point2f> &matchesImgPixelPos,
 													  const std::vector<cv::Point2f> &reprojectedPoints)
 {
-	std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+	PH_START();
 
 	// if we have to send debug images
 	cv::Mat reprojectionImg;
@@ -646,18 +659,17 @@ void CameraPoseEstimator::drawAndSendReproectionImage(const cv::Mat &arcoreImage
 		int g = ((double)rand()) / RAND_MAX * 255;
 		int b = ((double)rand()) / RAND_MAX * 255;
 		Scalar color = Scalar(r, g, b);
-		cv::circle(reprojectionImg, pix, 15, color, 5);
-		cv::line(reprojectionImg, pix, reprojPix, color, 3);
+		cv::circle(reprojectionImg, pix, 15, color, 2);
+		cv::line(reprojectionImg, pix, reprojPix, color, 1);
 	}
+
 	cv::putText(reprojectionImg, (std::to_string(inliers.size()) + "/" + std::to_string(matchesImgPixelPos.size())).c_str(), cv::Point(0, reprojectionImg.rows - 5), FONT_HERSHEY_SIMPLEX, 2, Scalar(255, 0, 0), 3);
 	sensor_msgs::ImagePtr msgReproj = cv_bridge::CvImage(std_msgs::Header(), "bgr8", reprojectionImg).toImageMsg();
 
 	// send the image
 	reproj_images_pub.publish(msgReproj);
 
-	std::chrono::steady_clock::time_point afterDrawMatches = std::chrono::steady_clock::now();
-	unsigned long drawMatchesDuration = std::chrono::duration_cast<std::chrono::milliseconds>(afterDrawMatches - start).count();
-	ROS_DEBUG("drawing and sending debug images took %lu ms", drawMatchesDuration);
+	ROS_DEBUG("drawing and sending debug images took %.3f ms", PH_SNAP());
 }
 
 /**
@@ -1153,14 +1165,15 @@ int CameraPoseEstimator::get3dPositionsAndImagePositions(const std::vector<cv::D
 		cv::Point2f kinectPixelPos = fixedKeypoints.at(inputMatches.at(i).trainIdx).pt;
 		cv::Point2f arcorePixelPos = arcoreKeypoints.at(inputMatches.at(i).queryIdx).pt;
 		cv::Point3f pos3d = get3dPoint(kinectPixelPos.x, kinectPixelPos.y,
-									   kinectDepthImg.at<uint16_t>(kinectPixelPos),
+									   kinectDepthImg.at<uint16_t>(kinectPixelPos) * 1000,
 									   kinectCameraMatrix.at<double>(0, 0), kinectCameraMatrix.at<double>(1, 1),
 									   kinectCameraMatrix.at<double>(0, 2), kinectCameraMatrix.at<double>(1, 2));
 		matches3dPos.push_back(pos3d);
 		matchesImgPos.push_back(arcorePixelPos);
 
-		// ROS_DEBUG_STREAM("good match between " << kinectPixelPos.x << ";" << kinectPixelPos.y << " \tand \t" << arcorePixelPos.x << ";" << arcorePixelPos.y << " \tdistance = " << inputMatches.at(i).distance);
-		// ROS_INFO_STREAM("depth = "<<kinectDepthImg.at<uint16_t>(kinectPixelPos));
+		ROS_DEBUG_STREAM("good match between " << kinectPixelPos.x << ";" << kinectPixelPos.y << " \tand \t" << arcorePixelPos.x << ";" << arcorePixelPos.y << " \tdistance = " << inputMatches.at(i).distance);
+		ROS_DEBUG_STREAM("depth = "<<kinectDepthImg.at<uint16_t>(kinectPixelPos));
+		ROS_DEBUG_STREAM("pos3d = "<<pos3d);
 	}
 	return 0;
 }
